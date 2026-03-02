@@ -39,7 +39,7 @@ This project solves all of the above.
 ```bash
 git clone https://github.com/hjunhuh/wireguard-macos.git
 cd wireguard-macos
-chmod +x install.sh add-client.sh remove.sh status.sh
+chmod +x install.sh client.sh remove.sh status.sh
 
 # Install server (do NOT use sudo — it will ask when needed)
 ./install.sh
