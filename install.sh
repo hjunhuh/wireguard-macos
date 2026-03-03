@@ -127,41 +127,57 @@ cp -f "${WG_DIR}/wg0.conf" "${WG_DIR}/wg0.conf.def"
 # --- 6. Generate NAT scripts ---
 echo "[6/7] Generating NAT scripts..."
 
-# postup.sh — WAN_INTERFACE_NAME is expanded via unquoted heredoc
+# postup.sh — WAN_INTERFACE_NAME / VPN_SUBNET expanded at install time (unquoted heredoc)
+#              WG_IF uses \$ to expand at runtime
 cat > "${WG_DIR}/postup.sh" << POSTUP
 #!/bin/sh
-# WireGuard PostUp: Dynamically add NAT rules
-# Based on barrowclift.me guide + lifepillar improvement
+# WireGuard PostUp: NAT + pass rules + subnet route
 
 mkdir -p /usr/local/var/run/wireguard
 chmod 700 /usr/local/var/run/wireguard
 
-# Add NAT rule to pfctl anchor + save token
-# -E: enable pf and increment reference count
-# -f -: read rules from stdin
-echo 'nat on ${WAN_INTERFACE_NAME} from ${VPN_SUBNET}0/24 to any -> (${WAN_INTERFACE_NAME})' | \\
+# Get the actual utun interface name (macOS assigns utunN dynamically)
+WG_IF=\$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+
+# Add NAT + pass rules to pfctl anchor + save token
+# NAT alone is insufficient — explicit pass rules are needed for forwarded traffic
+echo "nat on ${WAN_INTERFACE_NAME} from ${VPN_SUBNET}0/24 to any -> (${WAN_INTERFACE_NAME})
+pass quick on \${WG_IF} all
+pass quick on ${WAN_INTERFACE_NAME} from ${VPN_SUBNET}0/24 to any" | \\
     pfctl -a com.apple/wireguard -Ef - 2>&1 | \\
     grep 'Token' | \\
     sed 's%Token : \(.*\)%\1%' > /usr/local/var/run/wireguard/pf_wireguard_token.txt
+
+# macOS utun (point-to-point) interfaces only create host routes, not subnet routes.
+# Without this, return traffic cannot be routed back to VPN clients.
+if [ -n "\${WG_IF}" ]; then
+    route add -net ${VPN_SUBNET}0/24 -interface "\${WG_IF}" 2>/dev/null || true
+fi
 POSTUP
 
 # postdown.sh — quoted heredoc to prevent variable expansion
 cat > "${WG_DIR}/postdown.sh" << 'POSTDOWN'
 #!/bin/sh
-# WireGuard PostDown: Remove NAT rules + release pf reference
-# [FIX] Flush anchor first to ensure NAT rules are fully removed
+# WireGuard PostDown: Remove NAT/pass rules, subnet route, release pf reference
 
-# 1) Flush NAT rules from anchor
+# 1) Get the utun interface name before cleanup
+WG_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+
+# 2) Flush all rules from anchor
 pfctl -a com.apple/wireguard -F all 2>/dev/null || true
 
-# 2) Decrement pf reference count (-X)
-#    If no other references remain, pf itself will be disabled
+# 3) Decrement pf reference count (-X)
 TOKEN=$(cat /usr/local/var/run/wireguard/pf_wireguard_token.txt 2>/dev/null)
 if [ -n "${TOKEN}" ]; then
     pfctl -X "${TOKEN}" 2>/dev/null || true
 fi
 
-# 3) Clean up token file
+# 4) Remove subnet route
+if [ -n "${WG_IF}" ]; then
+    route delete -net 10.0.10.0/24 -interface "${WG_IF}" 2>/dev/null || true
+fi
+
+# 5) Clean up token file
 rm -f /usr/local/var/run/wireguard/pf_wireguard_token.txt
 POSTDOWN
 
