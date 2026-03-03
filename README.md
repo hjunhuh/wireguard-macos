@@ -105,9 +105,9 @@ Example output:
 
   IP forwarding: ENABLED
   NAT rule:      ACTIVE (nat on en0 inet from 10.0.10.0/24 to any -> (en0))
-  PF token:      17592186044426
+  PF token:      ...
 
-  Public IP:     203.0.113.5
+  Public IP:     ...
 
   Registered clients:
     - iphone (10.0.10.2)

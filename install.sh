@@ -47,8 +47,12 @@ umask 077
 
 # --- 3. Generate server keys ---
 echo "[3/7] Generating server keys..."
-SERVER_PRIVKEY=$( ${WG_BIN} genkey )
-SERVER_PUBKEY=$( echo "${SERVER_PRIVKEY}" | ${WG_BIN} pubkey )
+SERVER_PRIVKEY=$( "${WG_BIN}" genkey )
+SERVER_PUBKEY=$( echo "${SERVER_PRIVKEY}" | "${WG_BIN}" pubkey )
+if [[ -z "${SERVER_PRIVKEY}" || -z "${SERVER_PUBKEY}" ]]; then
+    echo "[!] Failed to generate server keys. Is wireguard-tools installed?"
+    exit 1
+fi
 echo "${SERVER_PUBKEY}" > ./server_public.key
 echo "${SERVER_PRIVKEY}" > ./server_private.key
 echo "  Server public key: ${SERVER_PUBKEY}"
@@ -63,12 +67,22 @@ if [[ -z "${ENDPOINT}" ]]; then
     echo "[!] Endpoint is empty. Aborting."
     exit 1
 fi
+# Validate endpoint format: IP:PORT or HOSTNAME:PORT
+if [[ ! "${ENDPOINT}" =~ :[0-9]+$ ]]; then
+    echo "[!] Invalid endpoint format. Expected IP:PORT or HOSTNAME:PORT (e.g. 1.2.3.4:51820)"
+    exit 1
+fi
 echo "${ENDPOINT}" > ./endpoint.var
 
 # Server VPN IP
 read "SERVER_IP?Server VPN IP (default: 10.0.10.1): "
 if [[ -z "${SERVER_IP}" ]]; then
     SERVER_IP="10.0.10.1"
+fi
+# Validate IP address format (basic check: four octets 0-255)
+if [[ ! "${SERVER_IP}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    echo "[!] Invalid IP address format: ${SERVER_IP}"
+    exit 1
 fi
 # Extract subnet prefix (e.g. 10.0.10.1 -> 10.0.10.)
 VPN_SUBNET=$(echo "${SERVER_IP}" | grep -o -E '([0-9]+\.){3}')
@@ -147,6 +161,7 @@ pass quick on ${WAN_INTERFACE_NAME} from ${VPN_SUBNET}0/24 to any" | \\
     pfctl -a com.apple/wireguard -Ef - 2>&1 | \\
     grep 'Token' | \\
     sed 's%Token : \(.*\)%\1%' > /usr/local/var/run/wireguard/pf_wireguard_token.txt
+chmod 600 /usr/local/var/run/wireguard/pf_wireguard_token.txt
 
 # macOS utun (point-to-point) interfaces only create host routes, not subnet routes.
 # Without this, return traffic cannot be routed back to VPN clients.
@@ -155,26 +170,27 @@ if [ -n "\${WG_IF}" ]; then
 fi
 POSTUP
 
-# postdown.sh — quoted heredoc to prevent variable expansion
-cat > "${WG_DIR}/postdown.sh" << 'POSTDOWN'
+# postdown.sh — unquoted heredoc so VPN_SUBNET is expanded at install time;
+#                WG_IF uses \$ to expand at runtime
+cat > "${WG_DIR}/postdown.sh" << POSTDOWN
 #!/bin/sh
 # WireGuard PostDown: Remove NAT/pass rules, subnet route, release pf reference
 
 # 1) Get the utun interface name before cleanup
-WG_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+WG_IF=\$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
 
 # 2) Flush all rules from anchor
 pfctl -a com.apple/wireguard -F all 2>/dev/null || true
 
 # 3) Decrement pf reference count (-X)
-TOKEN=$(cat /usr/local/var/run/wireguard/pf_wireguard_token.txt 2>/dev/null)
-if [ -n "${TOKEN}" ]; then
-    pfctl -X "${TOKEN}" 2>/dev/null || true
+TOKEN=\$(cat /usr/local/var/run/wireguard/pf_wireguard_token.txt 2>/dev/null)
+if [ -n "\${TOKEN}" ]; then
+    pfctl -X "\${TOKEN}" 2>/dev/null || true
 fi
 
 # 4) Remove subnet route
-if [ -n "${WG_IF}" ]; then
-    route delete -net 10.0.10.0/24 -interface "${WG_IF}" 2>/dev/null || true
+if [ -n "\${WG_IF}" ]; then
+    route delete -net ${VPN_SUBNET}0/24 -interface "\${WG_IF}" 2>/dev/null || true
 fi
 
 # 5) Clean up token file
@@ -183,6 +199,15 @@ POSTDOWN
 
 chmod 755 "${WG_DIR}/postup.sh"
 chmod 755 "${WG_DIR}/postdown.sh"
+
+# Copy management scripts to WG_DIR so users can call them from the install location
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+for script in client.sh status.sh remove.sh; do
+    if [[ -f "${SCRIPT_DIR}/${script}" ]]; then
+        cp -f "${SCRIPT_DIR}/${script}" "${WG_DIR}/${script}"
+        chmod 755 "${WG_DIR}/${script}"
+    fi
+done
 
 # --- 7. Register launchd service ---
 echo "[7/7] Registering auto-start on boot..."
@@ -209,9 +234,9 @@ sudo tee "${PLIST_PATH}" > /dev/null << EOF
     <key>KeepAlive</key>
     <false/>
     <key>StandardErrorPath</key>
-    <string>/tmp/wireguard-wg0.err</string>
+    <string>${BREW_PREFIX}/var/log/wireguard-wg0.err</string>
     <key>StandardOutPath</key>
-    <string>/tmp/wireguard-wg0.log</string>
+    <string>${BREW_PREFIX}/var/log/wireguard-wg0.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -237,7 +262,7 @@ cat > "${WRAPPER}" << WRAPPER_EOF
 #!/bin/zsh
 # Wrapper to run wg-quick with Homebrew bash
 # Usage: sudo ${WRAPPER} up|down [conf]
-exec sudo ${BREW_BASH} ${WG_QUICK} "\$@"
+exec sudo "${BREW_BASH}" "${WG_QUICK}" "\$@"
 WRAPPER_EOF
 chmod 755 "${WRAPPER}"
 

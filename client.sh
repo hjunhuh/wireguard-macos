@@ -41,7 +41,7 @@ CLIENT_DIR="${WG_DIR}/clients/${CLIENT_NAME}"
 if [[ -d "${CLIENT_DIR}" ]]; then
     echo "[!] Client '${CLIENT_NAME}' already exists."
     echo "    Directory: ${CLIENT_DIR}"
-    echo "    To remove an existing client, use remove-client.sh."
+    echo "    To remove, delete the directory and remove the [Peer] block from wg0.conf."
     exit 1
 fi
 
@@ -50,9 +50,16 @@ SERVER_PUBKEY=$(cat "${WG_DIR}/server_public.key")
 ENDPOINT=$(cat "${WG_DIR}/endpoint.var")
 DNS=$(cat "${WG_DIR}/dns.var")
 VPN_SUBNET=$(cat "${WG_DIR}/vpn_subnet.var")
-LAST_IP=$(cat "${WG_DIR}/last_used_ip.var")
 
-# Assign new IP
+# Assign new IP (use lock directory to prevent race condition)
+LOCK_DIR="${WG_DIR}/.client.lock"
+if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+    echo "[!] Another client.sh is running. Please wait."
+    echo "    (If no other instance is running, remove ${LOCK_DIR} manually)"
+    exit 1
+fi
+trap 'rmdir "${LOCK_DIR}" 2>/dev/null' EXIT
+LAST_IP=$(cat "${WG_DIR}/last_used_ip.var")
 NEXT_IP=$((LAST_IP + 1))
 if [[ ${NEXT_IP} -gt 254 ]]; then
     echo "[!] IP address range exhausted (max 253 clients)."
@@ -62,9 +69,9 @@ CLIENT_IP="${VPN_SUBNET}${NEXT_IP}"
 echo "${NEXT_IP}" > "${WG_DIR}/last_used_ip.var"
 
 # --- Generate client keys ---
-CLIENT_PRIVKEY=$( ${WG_BIN} genkey )
-CLIENT_PUBKEY=$( echo "${CLIENT_PRIVKEY}" | ${WG_BIN} pubkey )
-CLIENT_PSK=$( ${WG_BIN} genpsk )
+CLIENT_PRIVKEY=$( "${WG_BIN}" genkey )
+CLIENT_PUBKEY=$( echo "${CLIENT_PRIVKEY}" | "${WG_BIN}" pubkey )
+CLIENT_PSK=$( "${WG_BIN}" genpsk )
 
 # Create client directory
 mkdir -p "${CLIENT_DIR}"

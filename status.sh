@@ -39,12 +39,20 @@ fi
 
 echo ""
 
-# IP forwarding
+# IP forwarding (IPv4)
 FWD=$(sysctl -n net.inet.ip.forwarding)
 if [[ "${FWD}" == "1" ]]; then
-    echo "  IP forwarding: ENABLED"
+    echo "  IPv4 forwarding: ENABLED"
 else
-    echo "  IP forwarding: DISABLED"
+    echo "  IPv4 forwarding: DISABLED"
+fi
+
+# IP forwarding (IPv6)
+FWD6=$(sysctl -n net.inet6.ip6.forwarding)
+if [[ "${FWD6}" == "1" ]]; then
+    echo "  IPv6 forwarding: ENABLED"
+else
+    echo "  IPv6 forwarding: DISABLED"
 fi
 
 # PF NAT rules

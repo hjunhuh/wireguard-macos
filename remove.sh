@@ -33,9 +33,10 @@ echo "[2/4] Removing auto-start service..."
 sudo launchctl bootout system "${PLIST_PATH}" 2>/dev/null || true
 sudo rm -f "${PLIST_PATH}"
 
-# 3. Disable IP forwarding
+# 3. Disable IP forwarding (IPv4 + IPv6)
 echo "[3/4] Disabling IP forwarding..."
 sudo sysctl -w net.inet.ip.forwarding=0 2>/dev/null || true
+sudo sysctl -w net.inet6.ip6.forwarding=0 2>/dev/null || true
 
 # 4. Remove config files
 echo "[4/4] Removing configuration files..."
@@ -50,6 +51,7 @@ fi
 # Clean up runtime/logs
 sudo rm -rf /usr/local/var/run/wireguard 2>/dev/null || true
 sudo rm -f /tmp/wireguard-wg0.err /tmp/wireguard-wg0.log
+sudo rm -f "${BREW_PREFIX}/var/log/wireguard-wg0.err" "${BREW_PREFIX}/var/log/wireguard-wg0.log"
 
 echo ""
 echo "WireGuard removal complete."
