@@ -39,7 +39,7 @@ This project solves all of the above.
 ```bash
 git clone https://github.com/hjunhuh/wireguard-macos.git
 cd wireguard-macos
-chmod +x install.sh client.sh remove.sh status.sh
+chmod +x install.sh client.sh remove.sh status.sh monitor.sh
 
 # Install server (do NOT use sudo — it will ask when needed)
 ./install.sh
@@ -115,6 +115,48 @@ Example output:
 
 ============================================================
 ```
+
+### Real-time monitor
+
+```bash
+sudo ./monitor.sh
+```
+
+A live dashboard that refreshes every 2 seconds, showing:
+
+- Per-client online/offline status, endpoint, and last handshake time
+- Per-client RX/TX traffic with real-time bandwidth (KB/s, MB/s)
+- Total server traffic and peer summary
+
+```
+============================================================
+  WireGuard Monitor                     [2026-03-03 14:32:05]
+============================================================
+
+  Interface:  utun10            Port: 51820
+  Public Key: aBcDeFgHiJkLmNoPqRsT...
+  Uptime:     3d 14h 22m        Peers: 2/3 online
+
+------------------------------------------------------------
+  CLIENT        STATUS    ENDPOINT            LAST HANDSHAKE
+------------------------------------------------------------
+  iphone        ONLINE    203.0.113.50:4921     12s ago
+                RX: 145.2 MB (52.3 KB/s)   TX: 1.2 GB (128.7 KB/s)
+  macbook       ONLINE    198.51.100.8:51820    45s ago
+                RX: 2.3 GB (1.2 MB/s)      TX: 523.4 MB (256.0 KB/s)
+  ipad          OFFLINE   --                    3h 12m ago
+                RX: 89.1 MB (0 B/s)        TX: 12.3 MB (0 B/s)
+------------------------------------------------------------
+
+  TOTALS        RX: 2.5 GB (1.3 MB/s)      TX: 1.7 GB (384.7 KB/s)
+  PEERS         3 registered, 2 online, 1 offline
+
+============================================================
+  Refresh: 2s | Ctrl+C to exit
+============================================================
+```
+
+Press `Ctrl+C` to exit the monitor.
 
 ### Uninstall
 
