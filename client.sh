@@ -101,10 +101,12 @@ PersistentKeepalive = 25
 EOF
 
 # --- Apply live if WireGuard is running ---
-# On macOS, interface is utunN, not wg0. Check all WG interfaces.
-if sudo ${WG_BIN} show > /dev/null 2>&1; then
-    echo "[*] Adding peer to running server..."
-    sudo ${WG_BIN} set wg0 peer "${CLIENT_PUBKEY}" \
+# On macOS, the actual interface is utunN, not wg0.
+# Read the real interface name from the .name file created by wg-quick.
+WG_REAL_IF=$(sudo cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+if [[ -n "${WG_REAL_IF}" ]]; then
+    echo "[*] Adding peer to running server (${WG_REAL_IF})..."
+    sudo ${WG_BIN} set "${WG_REAL_IF}" peer "${CLIENT_PUBKEY}" \
         preshared-key "${CLIENT_DIR}/presharedkey" \
         allowed-ips "${CLIENT_IP}/32"
     echo "[*] Applied live (no restart needed)"
