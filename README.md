@@ -4,27 +4,13 @@ One-command WireGuard VPN server setup for **macOS on Apple Silicon** (M1/M2/M3/
 
 Sets up a full WireGuard server on a Mac Mini (or any Mac) with interactive configuration, automatic NAT via `pfctl`, auto-start on boot via `launchd`, and QR code generation for mobile clients — all without Docker.
 
-## Why this exists
-
-Running a WireGuard server on macOS has several platform-specific gotchas that existing scripts and guides don't handle well together:
-
-- **Apple Silicon paths** — Homebrew installs to `/opt/homebrew`, not `/usr/local`. Most WireGuard scripts hardcode Intel paths.
-- **bash 3.2** — macOS ships with bash 3.2 (2007), but `wg-quick` requires bash 4+. Running `sudo wg-quick` picks up the system bash and fails silently.
-- **`utun` interfaces** — macOS maps WireGuard to `utun0`, `utun3`, `utun10`, etc. instead of `wg0`. Tools that check for `wg0` will report the server as stopped when it's actually running.
-- **`/etc/pf.conf` fragility** — Editing the system packet filter config directly gets overwritten on macOS updates. The proper approach is `pfctl` anchors.
-- **Homebrew + root** — `brew install` refuses to run as root, so `sudo ./install.sh` breaks at the first step.
-
-This project solves all of the above.
-
 ## Features
 
-- Automatic Apple Silicon / Intel detection
 - Interactive setup (endpoint, VPN subnet, DNS, WAN interface)
 - NAT via `pfctl` anchors (survives macOS updates)
 - Auto-start on boot via `launchd`
 - Client management with QR codes for mobile setup
 - PresharedKey for post-quantum security
-- Live peer addition without server restart
 - Duplicate client detection and IP range validation
 
 ## Prerequisites
@@ -245,6 +231,18 @@ This is expected on macOS. WireGuard maps to `utun` interfaces (e.g., `utun10`),
 ### Homebrew refuses to run ("Running Homebrew as root")
 
 Do not use `sudo ./install.sh`. Run `./install.sh` directly — the script calls `sudo` internally only where needed.
+
+## Why this exists
+
+Running a WireGuard server on macOS has several platform-specific gotchas that existing scripts and guides don't handle well together:
+
+- **Apple Silicon paths** — Homebrew installs to `/opt/homebrew`, not `/usr/local`. Most WireGuard scripts hardcode Intel paths.
+- **bash 3.2** — macOS ships with bash 3.2 (2007), but `wg-quick` requires bash 4+. Running `sudo wg-quick` picks up the system bash and fails silently.
+- **`utun` interfaces** — macOS maps WireGuard to `utun0`, `utun3`, `utun10`, etc. instead of `wg0`. Tools that check for `wg0` will report the server as stopped when it's actually running.
+- **`/etc/pf.conf` fragility** — Editing the system packet filter config directly gets overwritten on macOS updates. The proper approach is `pfctl` anchors.
+- **Homebrew + root** — `brew install` refuses to run as root, so `sudo ./install.sh` breaks at the first step.
+
+This project solves all of the above.
 
 ## How It Works
 
