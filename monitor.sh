@@ -55,9 +55,9 @@ build_pubkey_map() {
             local name
             name=$(basename "${client_dir}")
             local pubkey
-            pubkey=$(cat "${client_dir}/publickey" 2>/dev/null | tr -d '[:space:]')
+            pubkey=$(tr -d '[:space:]' < "${client_dir}/publickey" 2>/dev/null)
             local ip
-            ip=$(cat "${client_dir}/ip" 2>/dev/null | tr -d '[:space:]')
+            ip=$(tr -d '[:space:]' < "${client_dir}/ip" 2>/dev/null)
             if [[ -n "${pubkey}" ]]; then
                 PEER_NAME[${pubkey}]="${name}"
                 # shellcheck disable=SC2034
@@ -146,7 +146,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # --- Check server running ---
-WG_REAL_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+WG_REAL_IF=$(tr -d '[:space:]' < /var/run/wireguard/wg0.name 2>/dev/null)
 if [[ -z "${WG_REAL_IF}" ]]; then
     echo "[!] WireGuard is not running."
     echo "    Start with: sudo ${BREW_PREFIX}/bin/bash ${BREW_PREFIX}/bin/wg-quick up ${WG_DIR}/wg0.conf"
@@ -339,7 +339,7 @@ while true; do
     fi
 
     # Check server still running
-    WG_REAL_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+    WG_REAL_IF=$(tr -d '[:space:]' < /var/run/wireguard/wg0.name 2>/dev/null)
     if [[ -z "${WG_REAL_IF}" ]]; then
         printf '\033[H\033[2J'
         echo ""
