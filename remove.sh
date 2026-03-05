@@ -1,4 +1,6 @@
 #!/bin/zsh
+# shellcheck shell=bash
+# shellcheck disable=SC2162
 
 # ============================================================
 # WireGuard Uninstall Script (Apple Silicon compatible)

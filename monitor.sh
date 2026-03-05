@@ -1,4 +1,6 @@
 #!/bin/zsh
+# shellcheck shell=bash
+# shellcheck disable=SC2162,SC2051
 
 # ============================================================
 # WireGuard Real-Time Monitor Dashboard
@@ -26,6 +28,7 @@ C_BOLD='\033[1m'
 C_DIM='\033[2m'
 C_GREEN='\033[32m'
 C_RED='\033[31m'
+# shellcheck disable=SC2034
 C_CYAN='\033[36m'
 C_BOLD_GREEN='\033[1;32m'
 C_BOLD_RED='\033[1;31m'
@@ -49,11 +52,15 @@ build_pubkey_map() {
     if [[ -d "${WG_DIR}/clients" ]]; then
         for client_dir in "${WG_DIR}/clients"/*/; do
             [[ -d "${client_dir}" ]] || continue
-            local name=$(basename "${client_dir}")
-            local pubkey=$(cat "${client_dir}/publickey" 2>/dev/null | tr -d '[:space:]')
-            local ip=$(cat "${client_dir}/ip" 2>/dev/null | tr -d '[:space:]')
+            local name
+            name=$(basename "${client_dir}")
+            local pubkey
+            pubkey=$(cat "${client_dir}/publickey" 2>/dev/null | tr -d '[:space:]')
+            local ip
+            ip=$(cat "${client_dir}/ip" 2>/dev/null | tr -d '[:space:]')
             if [[ -n "${pubkey}" ]]; then
                 PEER_NAME[${pubkey}]="${name}"
+                # shellcheck disable=SC2034
                 PEER_IP[${pubkey}]="${ip}"
             fi
         done
@@ -95,7 +102,8 @@ format_relative_time() {
         printf "never"
         return
     fi
-    local now=$(date +%s)
+    local now
+    now=$(date +%s)
     local delta=$((now - timestamp))
     if [[ ${delta} -lt 0 ]]; then
         printf "just now"
@@ -113,7 +121,8 @@ format_relative_time() {
 # --- Format uptime ---
 format_uptime() {
     local start=$1
-    local now=$(date +%s)
+    local now
+    now=$(date +%s)
     local delta=$((now - start))
     if [[ ${delta} -lt 60 ]]; then
         printf "%ds" "${delta}"
@@ -153,39 +162,22 @@ build_pubkey_map
 # --- Hide cursor ---
 printf '\033[?25l'
 
-# --- Main loop ---
-ITERATION=0
-while true; do
-    ITERATION=$((ITERATION + 1))
-
-    # Refresh pubkey map periodically
-    if (( ITERATION % MAP_REFRESH_INTERVAL == 0 )); then
-        build_pubkey_map
-    fi
-
-    # Check server still running
-    WG_REAL_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
-    if [[ -z "${WG_REAL_IF}" ]]; then
-        printf '\033[H\033[2J'
-        echo ""
-        echo "  [!] WireGuard server has stopped."
-        echo "      Waiting for restart... (Ctrl+C to exit)"
-        sleep ${REFRESH_INTERVAL}
-        continue
-    fi
-
+# --- Main render tick (wrapped in function so `local` is valid) ---
+render_tick() {
     # Collect data (single wg show dump call)
     local dump_output
     dump_output=$("${WG_BIN}" show "${WG_REAL_IF}" dump 2>/dev/null)
     if [[ -z "${dump_output}" ]]; then
-        sleep ${REFRESH_INTERVAL}
-        continue
+        return 1
     fi
 
     # Parse interface line
-    local iface_line=$(echo "${dump_output}" | head -1)
-    local SERVER_PUBKEY=$(echo "${iface_line}" | awk -F'\t' '{print $2}')
-    local SERVER_PORT=$(echo "${iface_line}" | awk -F'\t' '{print $3}')
+    local iface_line
+    iface_line=$(echo "${dump_output}" | head -1)
+    local SERVER_PUBKEY
+    SERVER_PUBKEY=$(echo "${iface_line}" | awk -F'\t' '{print $2}')
+    local SERVER_PORT
+    SERVER_PORT=$(echo "${iface_line}" | awk -F'\t' '{print $3}')
 
     # Parse peer lines into arrays
     typeset -a D_PK D_EP D_HS D_RX D_TX
@@ -195,6 +187,7 @@ while true; do
     D_RX=()
     D_TX=()
 
+    # shellcheck disable=SC2034
     while IFS=$'\t' read -r pubkey psk endpoint allowed handshake rx tx keepalive; do
         D_PK+=("${pubkey}")
         D_EP+=("${endpoint}")
@@ -204,7 +197,8 @@ while true; do
     done < <(echo "${dump_output}" | tail -n +2)
 
     # Calculate bandwidth
-    local now_ts=$(date +%s)
+    local now_ts
+    now_ts=$(date +%s)
     for i in {1..${#D_PK[@]}}; do
         local pk="${D_PK[$i]}"
         local cur_rx="${D_RX[$i]}"
@@ -232,8 +226,8 @@ while true; do
 
     for i in {1..${#D_PK[@]}}; do
         local pk="${D_PK[$i]}"
-        TOTAL_RX=$((TOTAL_RX + D_RX[$i]))
-        TOTAL_TX=$((TOTAL_TX + D_TX[$i]))
+        TOTAL_RX=$((TOTAL_RX + ${D_RX[$i]}))
+        TOTAL_TX=$((TOTAL_TX + ${D_TX[$i]}))
         TOTAL_RATE_RX=$((TOTAL_RATE_RX + ${RATE_RX[${pk}]:-0}))
         TOTAL_RATE_TX=$((TOTAL_RATE_TX + ${RATE_TX[${pk}]:-0}))
 
@@ -244,9 +238,11 @@ while true; do
     done
 
     # --- Render dashboard ---
-    local now_str=$(date "+%Y-%m-%d %H:%M:%S")
+    local now_str
+    now_str=$(date "+%Y-%m-%d %H:%M:%S")
     local short_key="${SERVER_PUBKEY:0:20}..."
-    local uptime_str=$(format_uptime "${WG_START}")
+    local uptime_str
+    uptime_str=$(format_uptime "${WG_START}")
     local output=""
 
     # Move cursor home
@@ -289,11 +285,16 @@ while true; do
                 status_color="${C_BOLD_GREEN}"
             fi
 
-            local hs_str=$(format_relative_time "${hs}")
-            local rx_str=$(format_bytes "${D_RX[$i]}")
-            local tx_str=$(format_bytes "${D_TX[$i]}")
-            local rx_rate=$(format_rate "${RATE_RX[${pk}]:-0}")
-            local tx_rate=$(format_rate "${RATE_TX[${pk}]:-0}")
+            local hs_str
+            hs_str=$(format_relative_time "${hs}")
+            local rx_str
+            rx_str=$(format_bytes "${D_RX[$i]}")
+            local tx_str
+            tx_str=$(format_bytes "${D_TX[$i]}")
+            local rx_rate
+            rx_rate=$(format_rate "${RATE_RX[${pk}]:-0}")
+            local tx_rate
+            tx_rate=$(format_rate "${RATE_TX[${pk}]:-0}")
 
             output+="$(printf "  ${C_BOLD}%-14s${C_RESET}${status_color}%-10s${C_RESET}%-20s%s" "${name}" "${status_str}" "${endpoint}" "${hs_str}")\n"
             output+="$(printf "                RX: %-12s (%-10s) TX: %-12s (%s)" "${rx_str}" "${rx_rate}" "${tx_str}" "${tx_rate}")\n"
@@ -304,10 +305,14 @@ while true; do
     output+="${C_DIM}------------------------------------------------------------${C_RESET}\n"
     output+="\n"
 
-    local total_rx_str=$(format_bytes "${TOTAL_RX}")
-    local total_tx_str=$(format_bytes "${TOTAL_TX}")
-    local total_rx_rate=$(format_rate "${TOTAL_RATE_RX}")
-    local total_tx_rate=$(format_rate "${TOTAL_RATE_TX}")
+    local total_rx_str
+    total_rx_str=$(format_bytes "${TOTAL_RX}")
+    local total_tx_str
+    total_tx_str=$(format_bytes "${TOTAL_TX}")
+    local total_rx_rate
+    total_rx_rate=$(format_rate "${TOTAL_RATE_RX}")
+    local total_tx_rate
+    total_tx_rate=$(format_rate "${TOTAL_RATE_TX}")
     local offline_count=$((TOTAL_PEERS - ONLINE_COUNT))
 
     output+="$(printf "  ${C_BOLD}TOTALS${C_RESET}        RX: %-12s (%-10s) TX: %-12s (%s)" "${total_rx_str}" "${total_rx_rate}" "${total_tx_str}" "${total_tx_rate}")\n"
@@ -321,6 +326,30 @@ while true; do
     output+='\033[J'
 
     printf '%b' "${output}"
+}
+
+# --- Main loop ---
+ITERATION=0
+while true; do
+    ITERATION=$((ITERATION + 1))
+
+    # Refresh pubkey map periodically
+    if (( ITERATION % MAP_REFRESH_INTERVAL == 0 )); then
+        build_pubkey_map
+    fi
+
+    # Check server still running
+    WG_REAL_IF=$(cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+    if [[ -z "${WG_REAL_IF}" ]]; then
+        printf '\033[H\033[2J'
+        echo ""
+        echo "  [!] WireGuard server has stopped."
+        echo "      Waiting for restart... (Ctrl+C to exit)"
+        sleep ${REFRESH_INTERVAL}
+        continue
+    fi
+
+    render_tick || { sleep ${REFRESH_INTERVAL}; continue; }
 
     sleep ${REFRESH_INTERVAL}
 done

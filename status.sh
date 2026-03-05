@@ -1,4 +1,5 @@
 #!/bin/zsh
+# shellcheck shell=bash
 
 # ============================================================
 # WireGuard Status Check Script
