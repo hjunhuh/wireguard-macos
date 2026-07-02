@@ -84,6 +84,14 @@ The installer will prompt for:
 
 A QR code is printed to the terminal. Scan it with the [WireGuard app](https://www.wireguard.com/install/) on iOS/Android, or import the generated `.conf` file on desktop clients.
 
+### Remove a client
+
+```bash
+./client.sh --remove iphone
+```
+
+Removes the client from the running WireGuard service. Run without a client name to see existing clients.
+
 ### Start / Stop
 
 > **Important:** Always use the Homebrew bash path. Running `sudo wg-quick` directly uses macOS system bash 3.2, which will fail.
