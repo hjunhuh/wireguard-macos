@@ -3,8 +3,9 @@
 # shellcheck disable=SC2162
 
 # ============================================================
-# WireGuard Add Client Script (Apple Silicon compatible)
-# Usage: ./client.sh [client_name]
+# WireGuard Client Management Script (Apple Silicon compatible)
+# Usage: ./client.sh [client_name]           (add client)
+#        ./client.sh --remove <name>          (remove client)
 #        (no sudo required, will prompt when needed)
 # ============================================================
 
@@ -19,9 +20,29 @@ fi
 
 WG_DIR="${BREW_PREFIX}/etc/wireguard"
 WG_BIN="${BREW_PREFIX}/bin/wg"
+BREW_BASH="${BREW_PREFIX}/bin/bash"
+WG_QUICK="${BREW_PREFIX}/bin/wg-quick"
+
+# --- Parse mode ---
+MODE="add"
+if [[ "$1" == "--remove" ]]; then
+    MODE="remove"
+    shift
+fi
 
 # --- Client name ---
 if [[ -z "$1" ]]; then
+    if [[ "${MODE}" == "remove" ]]; then
+        echo "Usage: ./client.sh --remove <client_name>"
+        echo ""
+        echo "Existing clients:"
+        if [[ -d "${WG_DIR}/clients" ]]; then
+            for d in "${WG_DIR}/clients"/*/; do
+                [[ -d "$d" ]] && echo "  - $(basename "$d")"
+            done
+        fi
+        exit 1
+    fi
     read "CLIENT_NAME?Enter client name (e.g. iphone, macbook): "
 else
     CLIENT_NAME="$1"
@@ -38,12 +59,81 @@ if [[ ! -f "${WG_DIR}/server_public.key" ]]; then
     exit 1
 fi
 
-# --- Check for duplicate client name ---
 CLIENT_DIR="${WG_DIR}/clients/${CLIENT_NAME}"
+
+# ============================================================
+# REMOVE MODE
+# ============================================================
+if [[ "${MODE}" == "remove" ]]; then
+    # --- Validate client exists ---
+    if [[ ! -d "${CLIENT_DIR}" ]]; then
+        echo "[!] Client '${CLIENT_NAME}' does not exist."
+        echo "    Directory not found: ${CLIENT_DIR}"
+        echo ""
+        echo "    Existing clients:"
+        if [[ -d "${WG_DIR}/clients" ]]; then
+            for d in "${WG_DIR}/clients"/*/; do
+                [[ -d "$d" ]] && echo "      - $(basename "$d")"
+            done
+        fi
+        exit 1
+    fi
+
+    echo "[*] Removing client '${CLIENT_NAME}'..."
+
+    # --- Remove peer from running WireGuard interface ---
+    WG_REAL_IF=$(sudo cat /var/run/wireguard/wg0.name 2>/dev/null | tr -d '[:space:]')
+    CLIENT_PUBKEY=$(cat "${CLIENT_DIR}/publickey")
+    CLIENT_IP=$(cat "${CLIENT_DIR}/ip" 2>/dev/null || echo "unknown")
+
+    if [[ -n "${WG_REAL_IF}" ]]; then
+        echo "    Removing peer from running server (${WG_REAL_IF})..."
+        sudo ${WG_BIN} set "${WG_REAL_IF}" peer "${CLIENT_PUBKEY}" remove 2>/dev/null || true
+        echo "    Peer removed live (${CLIENT_IP})"
+    else
+        echo "    Server is not running. Skipping live peer removal."
+    fi
+
+    # --- Remove [Peer] block from wg0.conf ---
+    # Uses awk to reliably remove the peer block: from the "# client_name"
+    # comment line through its properties up to the next blank line or EOF.
+    echo "    Removing peer block from wg0.conf..."
+    awk -v name="${CLIENT_NAME}" '
+        BEGIN { skip = 0 }
+        $0 == "# " name   { skip = 1; next }
+        skip == 1 && /^$/ { skip = 0; next }
+        skip == 1         { next }
+        { print }
+    ' "${WG_DIR}/wg0.conf" | sudo tee "${WG_DIR}/wg0.conf" > /dev/null
+    # Remove excessive consecutive blank lines (3+ → 1)
+    sudo sed -i '' '/^$/{N;/^\n$/D;}' "${WG_DIR}/wg0.conf"
+
+    # --- Delete client directory ---
+    echo "    Deleting client directory: ${CLIENT_DIR}"
+    rm -rf "${CLIENT_DIR}"
+
+    echo ""
+    echo "============================================================"
+    echo "  Client '${CLIENT_NAME}' removed successfully"
+    echo "============================================================"
+    echo ""
+    echo "  VPN IP freed:  ${CLIENT_IP}"
+    echo ""
+    echo "  Note: The IP ${CLIENT_IP} is now available for reuse."
+    echo "        last_used_ip.var was NOT decremented to avoid conflicts."
+    echo "============================================================"
+    exit 0
+fi
+
+# ============================================================
+# ADD MODE (original behavior)
+# ============================================================
+
+# --- Check for duplicate client name ---
 if [[ -d "${CLIENT_DIR}" ]]; then
     echo "[!] Client '${CLIENT_NAME}' already exists."
     echo "    Directory: ${CLIENT_DIR}"
-    echo "    To remove, delete the directory and remove the [Peer] block from wg0.conf."
+    echo "    To remove, run: ./client.sh --remove ${CLIENT_NAME}"
     exit 1
 fi
 
