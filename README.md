@@ -1,10 +1,10 @@
 <p align="center">
   <h1 align="center">wireguard-macos</h1>
   <p align="center">
-    <strong>The easiest way to run a WireGuard VPN server on macOS</strong>
+    <strong>Run a WireGuard VPN server on macOS</strong>
   </p>
   <p align="center">
-    One command to set up a full WireGuard server on any Mac — with auto-start, NAT, QR codes, and live monitoring.
+    One command to set up a full WireGuard server on any Mac with auto-start, NAT, QR codes, and live monitoring.
   </p>
 </p>
 
@@ -21,31 +21,8 @@
 
 ## Why wireguard-macos?
 
-Running a WireGuard server on macOS is full of platform-specific traps. Existing scripts and guides fail because they don't handle all of them together:
+Running a WireGuard server on macOS is full of platform-specific traps. Existing scripts and guides fail because they don't handle all of them together.
 
-| Problem | What goes wrong | How we fix it |
-| --- | --- | --- |
-| **Apple Silicon paths** | Homebrew installs to `/opt/homebrew`, not `/usr/local`. Most scripts hardcode Intel paths. | Auto-detect architecture at install time |
-| **bash 3.2** | macOS ships bash 3.2 (2007). `wg-quick` needs bash 4+. `sudo wg-quick` fails silently. | Force Homebrew bash via wrapper |
-| **`utun` interfaces** | macOS maps WireGuard to `utun0`, `utun3`, etc. — not `wg0`. Status checks break. | Detect active `utun` dynamically |
-| **`/etc/pf.conf` fragility** | Direct edits get overwritten on macOS updates. | Use `pfctl` anchors instead |
-| **Homebrew + root** | `brew install` refuses to run as root. `sudo ./install.sh` breaks immediately. | Run as user, `sudo` only where needed |
-
-**wireguard-macos solves all five.** No Docker, no VM, no hacks — just clean shell scripts that work with macOS, not against it.
-
-## Comparison
-
-| Feature | **wireguard-macos** | wg-easy | PiVPN | Manual setup |
-| --- | :---: | :---: | :---: | :---: |
-| macOS native | **Yes** | No (Docker) | No (Linux) | Partial |
-| Apple Silicon | **Yes** | N/A | N/A | Manual |
-| One-command install | **Yes** | Yes | Yes | No |
-| Auto-start on boot | **Yes** | Docker restart | systemd | Manual |
-| NAT survives OS updates | **Yes** | N/A | N/A | No |
-| QR codes for mobile | **Yes** | Yes | Yes | Manual |
-| Post-quantum preshared keys | **Yes** | No | Optional | Manual |
-| Live monitoring dashboard | **Yes** | Web UI | No | No |
-| No Docker required | **Yes** | No | Yes | Yes |
 
 ## Quick Start
 
@@ -213,6 +190,20 @@ After installation:
 /Library/LaunchDaemons/
 └── com.wireguard.wg0.plist  # Auto-start on boot
 ```
+
+## Comparison
+
+| Feature | **wireguard-macos** | wg-easy | PiVPN | Manual setup |
+| --- | :---: | :---: | :---: | :---: |
+| macOS native | **Yes** | No (Docker) | No (Linux) | Partial |
+| Apple Silicon | **Yes** | N/A | N/A | Manual |
+| One-command install | **Yes** | Yes | Yes | No |
+| Auto-start on boot | **Yes** | Docker restart | systemd | Manual |
+| NAT survives OS updates | **Yes** | N/A | N/A | No |
+| QR codes for mobile | **Yes** | Yes | Yes | Manual |
+| Post-quantum preshared keys | **Yes** | No | Optional | Manual |
+| Live monitoring dashboard | **Yes** | Web UI | No | No |
+| No Docker required | **Yes** | No | Yes | Yes |
 
 ## How It Works
 
